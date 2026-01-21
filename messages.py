@@ -1,6 +1,7 @@
 from dotenv import load_dotenv
 import os
 import requests
+from typing import Iterable, Optional
 
 messageIds = [
     "019b2a64-eebc-7815-84c5-e384fabc495c", #ictトラブルシューティング予選結果
@@ -13,29 +14,41 @@ messageIds = [
     "0195be37-dea6-7902-8d04-e46185873108", #githubへの招待
 ]
 
-def get_messages():
-
+def _get_session() -> requests.Session:
     load_dotenv()
-    base_url = "https://q.trap.jp/api/v3"
-
     r_session = os.getenv("r_session")
     if not r_session:
         raise RuntimeError("r_session が見つかりません（.env を確認してください）")
 
+    session = requests.Session()
+    session.cookies.set("r_session", r_session)
+    return session
+
+
+def get_messages(target_message_ids: Optional[Iterable[str]] = None):
+    base_url = "https://q.trap.jp/api/v3"
+    ids = list(target_message_ids) if target_message_ids is not None else messageIds
+
     result = []
 
-    with requests.Session() as session:
-        session.cookies.set("r_session", r_session)
+    with _get_session() as session:
+        for message_id in ids:
+            url = f"{base_url}/messages/{message_id}"
 
-        for messageId in messageIds:
-            url = f"{base_url}/messages/{messageId}"
-            
             try:
                 response = session.get(url)
                 response.raise_for_status()
                 result.append(response.json())
             except requests.exceptions.RequestException as e:
-                print(f"Error fetching message {messageId}: {e}")
-    
+                print(f"Error fetching message {message_id}: {e}")
+
     return result
+
+
+def download_file(file_id: str, base_url: str = "https://q.trap.jp/api/v3") -> bytes:
+    with _get_session() as session:
+        url = f"{base_url}/files/{file_id}/raw"
+        response = session.get(url)
+        response.raise_for_status()
+        return response.content
                 
